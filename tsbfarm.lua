@@ -1,12 +1,5 @@
--- =================================================================
--- إعدادات الحسابات الأساسية (ضع الأسماء الحقيقية هنا)
-local MAIN_ACCOUNT_NAME = "ضع_اسم_حساب_المين_هنا"
-local ALT_ACCOUNTS = {
-    "الآلت_الأول",
-    "الآلت_الثاني",
-    "الآلت_الثالث",
-}
--- =================================================================
+local MAIN_ACCOUNT_NAME = getgenv().mainName
+local ALT_ACCOUNTS = getgenv().altNames
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
