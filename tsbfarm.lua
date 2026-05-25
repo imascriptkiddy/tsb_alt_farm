@@ -308,3 +308,18 @@ end)
 table.insert(connections, closeConn)
 
 print("Script successfully loaded!")
+-- Smart Anti-AFK for Alt Farming (No Movement)
+local Players = game:GetService("Players")
+local VirtualUser = game:GetService("VirtualUser")
+local LocalPlayer = Players.LocalPlayer
+
+-- إلغاء كود الطرد عند الخمول بدون تحريك الشخصية
+if LocalPlayer then
+    LocalPlayer.Idled:Connect(function()
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new(0, 0))
+        print("Anti-AFK: Bypassed kick signal safely!")
+    end)
+end
+
+print("Anti-AFK successfully working")
