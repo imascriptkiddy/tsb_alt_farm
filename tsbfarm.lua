@@ -7,19 +7,18 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
-local VirtualUser = game:GetService("VirtualUser")
 local LocalPlayer = Players.LocalPlayer
 
 local AUTO_SPAWN_POSITION = Vector3.new(-2.13, 433.86, 576.61)
+
 local connections = {}
 
--- التعديل الجراحي: إلغاء الـ Attributes لأنها ما تنتقل بين الأجهزة، واستخدام الإحداثيات الثابتة
 local function setGlobalSpawn(pos)
-    _G.SavedSpawnPoint = pos
+    game:SetAttribute(MAIN_ACCOUNT_NAME .. "_SharedSpawn", pos)
 end
 
 local function getGlobalSpawn()
-    return AUTO_SPAWN_POSITION
+    return game:GetAttribute(MAIN_ACCOUNT_NAME .. "_SharedSpawn")
 end
 
 _G.AltResetDelay = 4.0
@@ -37,12 +36,10 @@ end
 local function safeTeleport(character, position)
     local hrp = character:WaitForChild("HumanoidRootPart", 10)
     if hrp then
-        pcall(function() -- حماية من الكراش
-            hrp.CFrame = CFrame.new(position + Vector3.new(0, 2, 0))
-            hrp.Anchored = true
-            task.wait(0.5)
-            hrp.Anchored = false
-        end)
+        hrp.CFrame = CFrame.new(position + Vector3.new(0, 2, 0))
+        hrp.Anchored = true
+        task.wait(0.5)
+        hrp.Anchored = false
     end
 end
 
@@ -55,12 +52,12 @@ local function handleAltReset(char)
     local humanoid = char:WaitForChild("Humanoid", 10)
     task.wait(_G.AltResetDelay)
     if humanoid and humanoid.Health > 0 then
-        pcall(function() humanoid.Health = 0 end)
+        humanoid.Health = 0
     end
 end
 
 if LocalPlayer.Character then
-    local sharedPos = getGlobalSpawn()
+    local sharedPos = getGlobalSpawn() or _G.SavedSpawnPoint
     if sharedPos then
         safeTeleport(LocalPlayer.Character, sharedPos)
     end
@@ -73,8 +70,8 @@ if LocalPlayer.Character then
 end
 
 local mainCharConn = LocalPlayer.CharacterAdded:Connect(function(char)
-    if LocalPlayer.Name == MAIN_ACCOUNT_NAME then
-        safeTeleport(char, getGlobalSpawn())
+    if LocalPlayer.Name == MAIN_ACCOUNT_NAME and _G.SavedSpawnPoint then
+        safeTeleport(char, _G.SavedSpawnPoint)
     end
 end)
 table.insert(connections, mainCharConn)
@@ -95,10 +92,8 @@ local loopConn = RunService.Heartbeat:Connect(function()
             local altHum = LocalPlayer.Character:FindFirstChild("Humanoid")
             
             if mainHRP and altHRP and altHum and altHum.Health > 0 then
-                pcall(function() -- حماية عشان ما يوقف الكود عند خويك
-                    altHRP.CFrame = mainHRP.CFrame * CFrame.new(0, 0, -3) * CFrame.Angles(0, math.pi, 0)
-                    altHRP.Velocity = Vector3.new(0, 0, 0)
-                end)
+                altHRP.CFrame = mainHRP.CFrame * CFrame.new(0, 0, -3) * CFrame.Angles(0, math.pi, 0)
+                altHRP.Velocity = Vector3.new(0, 0, 0)
             end
         end
     end
@@ -278,7 +273,7 @@ if LocalPlayer.Name == MAIN_ACCOUNT_NAME then
                     
                     task.wait(1)
                     if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-                        pcall(function() LocalPlayer.Character.Humanoid.Health = 0 end)
+                        LocalPlayer.Character.Humanoid.Health = 0
                     end
                 end)
                 table.insert(connections, conn2)
@@ -312,13 +307,19 @@ local closeConn = UserInputService.InputBegan:Connect(function(input, gameProces
 end)
 table.insert(connections, closeConn)
 
--- دمج وتفعيل Anti-AFK المطور
+print("Script successfully loaded!")
+-- Smart Anti-AFK for Alt Farming (No Movement)
+local Players = game:GetService("Players")
+local VirtualUser = game:GetService("VirtualUser")
+local LocalPlayer = Players.LocalPlayer
+
+-- إلغاء كود الطرد عند الخمول بدون تحريك الشخصية
 if LocalPlayer then
     LocalPlayer.Idled:Connect(function()
-        pcall(function()
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton2(Vector2.new(0, 0))
-            print("Anti-AFK: Bypassed kick signal safely!")
-        end)
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new(0, 0))
+        print("Anti-AFK: Bypassed kick signal safely!")
     end)
 end
+
+print("Anti-AFK successfully working")
