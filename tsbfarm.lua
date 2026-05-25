@@ -9,45 +9,46 @@ local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
 
+-- الإحداثيات الافتراضية للفارم
 local AUTO_SPAWN_POSITION = Vector3.new(-2.13, 433.86, 576.61)
 
 local connections = {}
-
-local function setGlobalSpawn(pos)
-    game:SetAttribute(MAIN_ACCOUNT_NAME .. "_SharedSpawn", pos)
-end
-
-local function getGlobalSpawn()
-    return game:GetAttribute(MAIN_ACCOUNT_NAME .. "_SharedSpawn")
-end
-
 _G.AltResetDelay = 4.0
 _G.FarmActive = true 
 
-if LocalPlayer.Name == MAIN_ACCOUNT_NAME then
-    _G.SavedSpawnPoint = AUTO_SPAWN_POSITION
-    setGlobalSpawn(AUTO_SPAWN_POSITION)
+local function isAltAccount(playerName)
+    if not ALT_ACCOUNTS then return false end
+    return table.find(ALT_ACCOUNTS, playerName) ~= nil
 end
 
-local function isAltAccount(playerName)
-    return table.find(ALT_ACCOUNTS, playerName) ~= nil
+-- دالة جلب مكان حساب الماين في السيرفر مباشرة لتفادي تعليق الحساب الآخر
+local function getMainPosition()
+    local mainPlayer = Players:FindFirstChild(MAIN_ACCOUNT_NAME)
+    if mainPlayer and mainPlayer.Character then
+        local hrp = mainPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            return hrp.Position
+        end
+    end
+    return AUTO_SPAWN_POSITION
 end
 
 local function safeTeleport(character, position)
     local hrp = character:WaitForChild("HumanoidRootPart", 10)
     if hrp then
-        hrp.CFrame = CFrame.new(position + Vector3.new(0, 2, 0))
-        hrp.Anchored = true
-        task.wait(0.5)
-        hrp.Anchored = false
+        pcall(function()
+            hrp.CFrame = CFrame.new(position + Vector3.new(0, 2, 0))
+            hrp.Anchored = true
+            task.wait(0.5)
+            hrp.Anchored = false
+        end)
     end
 end
 
 local function handleAltReset(char)
-    local sharedPos = getGlobalSpawn()
-    if sharedPos then
-        safeTeleport(char, sharedPos)
-    end
+    -- الحساب الآخر يروح لمكان الماين فوراً بدون تعقيد
+    local targetPos = getMainPosition()
+    safeTeleport(char, targetPos)
     
     local humanoid = char:WaitForChild("Humanoid", 10)
     task.wait(_G.AltResetDelay)
@@ -56,26 +57,26 @@ local function handleAltReset(char)
     end
 end
 
+-- أول ما يشتغل السكربت
 if LocalPlayer.Character then
-    local sharedPos = getGlobalSpawn() or _G.SavedSpawnPoint
-    if sharedPos then
-        safeTeleport(LocalPlayer.Character, sharedPos)
-    end
-    
-    if isAltAccount(LocalPlayer.Name) then
+    if LocalPlayer.Name == MAIN_ACCOUNT_NAME then
+        safeTeleport(LocalPlayer.Character, AUTO_SPAWN_POSITION)
+    elseif isAltAccount(LocalPlayer.Name) then
         task.spawn(function()
             handleAltReset(LocalPlayer.Character)
         end)
     end
 end
 
+-- عند رسبنة الماين
 local mainCharConn = LocalPlayer.CharacterAdded:Connect(function(char)
-    if LocalPlayer.Name == MAIN_ACCOUNT_NAME and _G.SavedSpawnPoint then
-        safeTeleport(char, _G.SavedSpawnPoint)
+    if LocalPlayer.Name == MAIN_ACCOUNT_NAME then
+        safeTeleport(char, AUTO_SPAWN_POSITION)
     end
 end)
 table.insert(connections, mainCharConn)
 
+-- عند رسبنة الحساب الآخر (الـ Alt)
 if isAltAccount(LocalPlayer.Name) then
     local altCharConn = LocalPlayer.CharacterAdded:Connect(function(char)
         handleAltReset(char)
@@ -83,6 +84,7 @@ if isAltAccount(LocalPlayer.Name) then
     table.insert(connections, altCharConn)
 end
 
+-- لوب الملاحقة والتثبيت خلف الماين
 local loopConn = RunService.Heartbeat:Connect(function()
     if isAltAccount(LocalPlayer.Name) then
         local mainPlayer = Players:FindFirstChild(MAIN_ACCOUNT_NAME)
@@ -92,14 +94,17 @@ local loopConn = RunService.Heartbeat:Connect(function()
             local altHum = LocalPlayer.Character:FindFirstChild("Humanoid")
             
             if mainHRP and altHRP and altHum and altHum.Health > 0 then
-                altHRP.CFrame = mainHRP.CFrame * CFrame.new(0, 0, -3) * CFrame.Angles(0, math.pi, 0)
-                altHRP.Velocity = Vector3.new(0, 0, 0)
+                pcall(function()
+                    altHRP.CFrame = mainHRP.CFrame * CFrame.new(0, 0, -3) * CFrame.Angles(0, math.pi, 0)
+                    altHRP.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                end)
             end
         end
     end
 end)
 table.insert(connections, loopConn)
 
+-- بناء الواجهة (UI)
 local function buildUI()
     if CoreGui:FindFirstChild("DirectFarmUI") then CoreGui.DirectFarmUI:Destroy() end
 
@@ -257,9 +262,10 @@ local function buildUI()
     end
 end
 
+buildUI()
+
+-- نظام مراقبة الموت من حساب الماين للـ Alts
 if LocalPlayer.Name == MAIN_ACCOUNT_NAME then
-    buildUI()
-    
     local function watchAltDeath(altPlayer)
         local conn1 = altPlayer.CharacterAdded:Connect(function(altChar)
             local humanoid = altChar:WaitForChild("Humanoid", 10)
@@ -289,10 +295,9 @@ if LocalPlayer.Name == MAIN_ACCOUNT_NAME then
         if isAltAccount(player.Name) then watchAltDeath(player) end
     end)
     table.insert(connections, pAddConn)
-elseif isAltAccount(LocalPlayer.Name) then
-    buildUI()
 end
 
+-- الإغلاق عبر زر CTRL الأيسر
 local closeConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if not gameProcessed and input.KeyCode == Enum.KeyCode.LeftControl then
         _G.FarmActive = false
@@ -307,19 +312,15 @@ local closeConn = UserInputService.InputBegan:Connect(function(input, gameProces
 end)
 table.insert(connections, closeConn)
 
-print("Script successfully loaded!")
--- Smart Anti-AFK for Alt Farming (No Movement)
-local Players = game:GetService("Players")
-local VirtualUser = game:GetService("VirtualUser")
-local LocalPlayer = Players.LocalPlayer
-
--- إلغاء كود الطرد عند الخمول بدون تحريك الشخصية
+-- Anti-AFK
 if LocalPlayer then
     LocalPlayer.Idled:Connect(function()
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton2(Vector2.new(0, 0))
-        print("Anti-AFK: Bypassed kick signal safely!")
+        pcall(function()
+            local VirtualUser = game:GetService("VirtualUser")
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new(0, 0))
+        end)
     end)
 end
 
-print("Anti-AFK successfully working")
+print("Script completely fixed and localized!")
